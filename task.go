@@ -66,3 +66,11 @@ func main() {
 		go doTaskModify(conn)
 	}
 }
+
+func doTaskModify()  {
+	
+}
+
+func parseQuery(conn net.Conn) (*TaskModify, error) {
+	return &TaskModify{}, nil
+}
