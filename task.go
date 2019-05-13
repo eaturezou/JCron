@@ -9,6 +9,8 @@
 package main
 
 import (
+	"bufio"
+	"lib/JCron/jcron"
 	"log"
 	"net"
 	"os"
@@ -67,10 +69,19 @@ func main() {
 	}
 }
 
-func doTaskModify()  {
-	
+func doTaskModify(conn net.Conn)  {
+	reader := bufio.NewScanner(conn)
+	var msg string
+	for reader.Scan() {
+		msg += reader.Text()
+	}
+	query, err := parseQuery(msg)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
 }
 
-func parseQuery(conn net.Conn) (*TaskModify, error) {
-	return &TaskModify{}, nil
+func parseQuery(queryStr string) (*jcron.TaskModify, error) {
+	return &jcron.TaskModify{}, nil
 }
