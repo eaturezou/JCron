@@ -19,17 +19,10 @@ import (
 	"time"
 )
 
-type CronTask interface {
-	New() bool
-	Modify(id int, task *Task) bool
-	Delete(id int) bool
-	State(id int)
-}
-
 type Task struct {
-	name string
+	Name string
 	TaskFrequency
-	command string
+	Command string
 }
 
 type TaskFrequency struct {
@@ -79,171 +72,121 @@ var (
 
 func (task *Task) New(fre *TaskFrequency) error {
 	//用执行的命令作为任务唯一标识
-	md5Str := task.command
+	md5Str := task.Command
 	md5Obj := md5.New()
 	md5Obj.Write([]byte(md5Str))
 	md5Id := hex.EncodeToString(md5Obj.Sum(nil))
 	cronTable[md5Id] = task
-	tickSecond, err := getTickSecond(task)
+	_, err := GetTickSecond(task)
 	if err != nil {
 		return err
 	}
-	go setTickCommand(tickSecond, task)
+	//go Set(tickSecond, task)
 	return errors.New("Create error ")
 }
 
-func setTickCommand(second time.Duration, task *Task)  {
-	tickChane := time.Tick(second)
-	<-tickChane
-
-}
-
-func (task *Task) Modify(id int, newTask *Task) bool {
-	return true
-}
-
-func (task *Task) Delete(id int) bool {
-	return true
-}
-
-func (task *Task) State(id int) {
-
-}
-
 //秒 分 时 日 周 月
-func getTickSecond(task *Task) (tickSecond time.Duration, err error) {
-	var nextTime string
-	nextTime += ""
-	var second, minute, hour, day, week, month, year int
-	week += 1
-	year += 1
-	now := time.Now()
-	nowYear, nowMonth, nowDay := now.Date()
-
-	var beyondDay int
-	//月格式解析
-	mon, err := parseTimeStr(task.month)
+//获取下次执行的时间， 字符串日期格式
+func GetTickSecond(task *Task) (tickSecond int64, err error) {
+	nowTime := time.Now()
+	factYear, nowMonth, factDay := nowTime.Date()
+	factMonth := int(nowMonth)
+	factHour := nowTime.Hour()
+	factMinute := nowTime.Minute()
+	factSecond := nowTime.Second()
+	secondTimeCron, err := parseTimeStr(task.Second)
 	if err != nil {
 		return 0, err
 	}
-	switch mon.cycleType {
-	case fixedTime:
-		month = mon.num
-	case ignoreTime:
-		month = int(nowMonth)
-	case cycleTime:
-		month += int(nowMonth) + mon.num - 1
-		if month > 12 {
-			beyondDay += (month - 12) * 30
-		}
-	}
-
-	//日格式解析
-	d, err := parseTimeStr(task.week)
+	minuteTimeCron, err := parseTimeStr(task.Minute)
 	if err != nil {
 		return 0, err
 	}
-	//周格式解析
-	we, err := parseTimeStr(task.week)
+	hourCronTime, err := parseTimeStr(task.Hour)
 	if err != nil {
 		return 0, err
 	}
-	if d.cycleType == ignoreTime {
-		switch we.cycleType {
-		case cycleTime:
-			we.num += 1
-			fallthrough
-		case fixedTime:
-			nowWeekday := now.Weekday()
-			diff := we.num - int(nowWeekday)
-			if diff < 0 {
-				diff = diff + 7
+	dayCronTime, err := parseTimeStr(task.Day)
+	if err != nil {
+		return 0, err
+	}
+	monthCronTime, err := parseTimeStr(task.Month)
+	if err != nil {
+		return 0, err
+	}
+	factSecond = parseCronTime(&secondTimeCron, factSecond)
+	if secondTimeCron.cycleType != fixedTime {
+		goto spliceTime
+	}
+	factMinute = parseCronTime(&minuteTimeCron, factMinute)
+	if minuteTimeCron.cycleType != fixedTime {
+		goto spliceTime
+	}
+	factHour = parseCronTime(&hourCronTime, factHour)
+	if minuteTimeCron.cycleType != fixedTime {
+		goto spliceTime
+	}
+	factDay = parseCronTime(&dayCronTime, factDay)
+	if dayCronTime.cycleType != fixedTime {
+		goto spliceTime
+	}
+	factMonth = parseCronTime(&monthCronTime, factMonth)
+	spliceTime:
+	if factSecond >= 60 {
+		factMinute += factSecond / 60
+		factSecond = factSecond % 60
+	}
+	if factMinute >= 60 {
+		factHour += factMinute / 60
+		factMinute = factMinute % 60
+	}
+	if factHour >= 24 {
+		factDay += factHour / 24
+		factHour = factHour % 24
+	}
+	thisDayNum := monthDayNumMap[nowMonth]
+	if factDay > thisDayNum {
+		for i := nowMonth; i < 12; i ++ {
+			if factDay > monthDayNumMap[i] {
+				 factDay -= monthDayNumMap[i]
+				 factMonth ++
+			} else {
+				break
 			}
-			day = nowDay + diff
-		case ignoreTime:
 		}
 	}
-	switch d.cycleType {
-	case fixedTime:
-		day = d.num
-	case ignoreTime:
-		day = nowDay
-	case cycleTime:
-		day = nowDay + d.num - 1
-		//todo 超过当前月范围往月份上加
-		thisMonthDayNum := monthDayNumMap[nowMonth]
-		if nowMonth == 2 && nowYear / 4 == 0 {
-			thisMonthDayNum ++
-		}
-		if day > thisMonthDayNum {
-			day = 1
-			beyondDay += day - thisMonthDayNum
-		}
+	if factMonth > 12 {
+		factYear = factYear + factMonth / 12
+		factMonth = factMonth % 12
 	}
-
-
-	//秒格式解析
-	s, err := parseTimeStr(task.second)
-	if err != nil {
-		return 0, err
-	}
-	if s.cycleType == fixedTime {
-		second += s.num
-	} else {
-		second = now.Second() + s.num
-		if second >= 60 {
-			minute += second / 60
-			second = second % 60
-		}
-	}
-
-	//分钟格式解析
-	min, err := parseTimeStr(task.minute)
-	if err != nil {
-		return 0, err
-	}
-	if min.cycleType == fixedTime {
-		minute += min.num
-	} else {
-		minute += now.Minute() + min.num
-		if minute >= 60 {
-			hour += minute / 60
-			minute = minute % 60
-		}
-	}
-	h, err := parseTimeStr(task.hour)
-	if err != nil {
-		return 0, err
-	}
-	if h.cycleType == fixedTime {
-		hour += h.num
-	} else {
-		hour = now.Hour() + h.num
-		if hour >= 24 {
-			day += hour / 24
-			minute = hour % 24
-		}
-	}
-	d, err = parseTimeStr(task.day)
-	if err != nil {
-		return 0, nil
-	}
-	if d.cycleType == fixedTime {
-		day += d.num
-	} else {
-		nowYear, nowMonth, nowDay := now.Date()
-		thisMonthDayNum := monthDayNumMap[nowMonth]
-		if nowMonth == 2 && nowYear / 4 == 0 {
-			thisMonthDayNum ++
-		}
-		day += nowDay
-		if day >= thisMonthDayNum{
-		}
-	}
-
-	return time.Duration(second), nil
+	factDate := strconv.Itoa(factYear) + "-" +
+		strconv.Itoa(factMonth) + "-" +
+		strconv.Itoa(factDay) + " " +
+		strconv.Itoa(factHour) + ":" +
+		strconv.Itoa(factMinute) + ":" +
+		strconv.Itoa(factSecond)
+	timestamp, _ := time.Parse("Y-m-d H:i:s", factDate)
+	return timestamp.Unix(), nil
 }
 
+/*
+解析实际的执行时间
+ */
+func parseCronTime(cronTime *CronTime, referTime int) (fact int) {
+	switch cronTime.cycleType {
+	case ignoreTime:
+		return referTime
+	case fixedTime:
+		return cronTime.num
+	case cycleTime:
+		return cronTime.num + referTime
+	}
+	return referTime
+}
+
+/*
+
+ */
 func parseTimeStr(str string) (CronTime, error) {
 	if num, err := strconv.Atoi(str); err == nil && num != 0 {
 		//为数字则为固定时间
@@ -258,13 +201,13 @@ func parseTimeStr(str string) (CronTime, error) {
 			num: 1,
 		}, nil
 	} else {
-		regexpObj, _ := regexp.Compile(`[1-9][0-9]+/\*?`)
+		regexpObj, _ := regexp.Compile(`[1-9][0-9]*/\*?`)
 		timStr := regexpObj.FindString(str)
 		if timStr == "" {
 			 log.Println("Time format error : " + str)
 			 return CronTime{}, errors.New("Time format error : " + str)
 		}
-		arr := strings.Split("/", timStr)
+		arr := strings.Split(timStr,  "/")
 		timeInt, _ := strconv.Atoi(arr[0])
 		return CronTime{
 			cycleType:cycleTime,

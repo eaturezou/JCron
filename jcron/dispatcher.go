@@ -10,7 +10,7 @@
 
 package jcron
 
-func dispatcher() {
-	select {
-	}
+type Queue CronTask
+
+func dispatcher(queue CronTask) {
 }

@@ -15,10 +15,10 @@ import (
 )
 
 type CronQueue interface {
-	Get(id string) (CronQueue, error)
-	Delete(id string) (CronQueue, error)
-	Insert(task *CronTask) CronQueue
-	GetFirst() CronQueue
+	Get(id string) (interface{}, error)
+	Delete(id string) (interface{}, error)
+	Insert(task *CronTask) interface{}
+	GetFirst() interface{}
 }
 
 type CronTask struct {
@@ -28,7 +28,12 @@ type CronTask struct {
 	Prev *CronTask
 }
 //1,3
-func (node *CronTask) Insert(task *CronTask) CronQueue {
+func (node *CronTask) Insert(task *CronTask) *CronTask {
+	if node.Id == "" {
+		node.Id = task.Id
+		node.ExecuteTime = task.ExecuteTime
+		return node
+	}
 	executeTime := task.ExecuteTime
 	for {
 		if node.ExecuteTime >= executeTime {
@@ -49,7 +54,7 @@ func (node *CronTask) Insert(task *CronTask) CronQueue {
 	return node
 }
 
-func (node *CronTask) Get(id string) (CronQueue, error) {
+func (node *CronTask) Get(id string) (*CronTask, error) {
 	for node.Next != nil  {
 		if node.Id == id {
 			return node, nil
@@ -60,11 +65,11 @@ func (node *CronTask) Get(id string) (CronQueue, error) {
 	return nil, errors.New("No Result ")
 }
 
-func (node *CronTask) GetFirst() CronQueue {
+func (node *CronTask) GetFirst() *CronTask {
 	return node
 }
 
-func (node *CronTask) Delete(id string) (CronQueue, error) {
+func (node *CronTask) Delete(id string) (*CronTask, error) {
 	res := node
 	for node.Next != nil  {
 		if node.Id == id {
