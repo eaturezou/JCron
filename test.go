@@ -13,39 +13,72 @@ package main
 import (
 	"fmt"
 	"learning/JCron/jcron"
+	"time"
 )
 
 func main() {
-	task := jcron.Task{
+	testTask()
+	//testLink()
+
+}
+
+var cronQueue = &jcron.CronTask{}
+
+func testLink() {
+	cronTask := &jcron.CronTask{
+		Id:"1",
+		ExecuteTime:1,
+	}
+	cronTask2 := &jcron.CronTask{
+		Id:"2",
+		ExecuteTime:2,
+	}
+	cronTask3 := &jcron.CronTask{
+		Id:"3",
+		ExecuteTime:3,
+	}
+	cronQueue.Insert(cronTask)
+	cronQueue.Insert(cronTask2)
+	cronQueue.Insert(cronTask3)
+	//printLink(cronQueue)
+	_, _ = cronQueue.Delete("1")
+	_, _ = cronQueue.Delete("2")
+	_, _ = cronQueue.Delete("3")
+	printLink(cronQueue)
+}
+
+func testTask()  {
+	task := &jcron.Task{
 		Name: "hello world",
 		TaskFrequency: jcron.TaskFrequency{
-			Second:"1",
-			Minute:"2",
+			Second:"10/*",
+			Minute:"*",
 			Hour:"*",
-			Day:"2/*",
+			Day:"*",
 			Month:"*",
 			Week:"*",
 		},
 		Command:"php -r 'echo 123;'",
 	}
-	timestamp, _ := jcron.GetTickSecond(&task)
-	cronTask := jcron.CronTask{
-		Id:"1892213109",
-		ExecuteTime:timestamp,
+	err := jcron.New(task)
+	if err != nil {
+		fmt.Println(err.Error())
 	}
-	cronTask2 := jcron.CronTask{
-		Id:"chdsodfoia",
-		ExecuteTime:321313131,
-	}
-	queue := &jcron.CronTask{}
-	queue.Insert(&cronTask)
-	queue.Insert(&cronTask2)
 	for {
-		fmt.Printf("%+v\n", queue)
-		if queue.Next != nil {
-			queue = queue.Next
-		} else {
+		fmt.Println("------------------Heart Beat------------------")
+		time.Sleep(5*time.Second)
+	}
+}
+
+func printLink(node *jcron.CronTask) {
+	for {
+		if node != nil {
+			fmt.Printf("%+v\n", node)
+		}
+		if node.Next == nil {
 			break
+		} else {
+			node = node.Next
 		}
 	}
 }

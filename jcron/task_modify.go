@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -32,11 +33,6 @@ type TaskFrequency struct {
 	Day string
 	Week string
 	Month string
-}
-
-type TaskModify struct {
-	operate string
-	task *Task
 }
 
 type CronTime struct {
@@ -66,23 +62,12 @@ var monthDayNumMap = [...]int{
 }
 
 var (
-	cronTable map[string]*Task
-	tickChan map[string]chan time.Time
+	cronQueue = &CronTask{}
+	mutex sync.RWMutex
 )
 
-func (task *Task) New(fre *TaskFrequency) error {
-	//用执行的命令作为任务唯一标识
-	md5Str := task.Command
-	md5Obj := md5.New()
-	md5Obj.Write([]byte(md5Str))
-	md5Id := hex.EncodeToString(md5Obj.Sum(nil))
-	cronTable[md5Id] = task
-	_, err := GetTickSecond(task)
-	if err != nil {
-		return err
-	}
-	//go Set(tickSecond, task)
-	return errors.New("Create error ")
+func init() {
+	go dispatcher()
 }
 
 //秒 分 时 日 周 月
@@ -184,9 +169,6 @@ func parseCronTime(cronTime *CronTime, referTime int) (fact int) {
 	return referTime
 }
 
-/*
-
- */
 func parseTimeStr(str string) (CronTime, error) {
 	if num, err := strconv.Atoi(str); err == nil && num != 0 {
 		//为数字则为固定时间
@@ -215,4 +197,33 @@ func parseTimeStr(str string) (CronTime, error) {
 		}, nil
 	}
 }
+
+//新增一个任务的任务队列
+func New(task *Task) error {
+	//用执行的命令作为任务唯一标识
+	md5Str := task.Command
+	md5Obj := md5.New()
+	md5Obj.Write([]byte(md5Str))
+	md5Id := hex.EncodeToString(md5Obj.Sum(nil))
+	timestamp, err := GetTickSecond(task)
+	if timestamp <= 0 {
+		return errors.New("Parse times error, timestamp lower than zero ")
+	}
+	if err != nil {
+		return err
+	}
+	newCronTsk := &CronTask{
+		Id:md5Id,
+		ExecuteTime:10,
+		Task:task,
+	}
+	cronQueue.Insert(newCronTsk)
+	return nil
+}
+
+func GetTask() *CronTask {
+	return cronQueue.GetFirst()
+}
+
+
 

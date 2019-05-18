@@ -24,16 +24,12 @@ type CronQueue interface {
 type CronTask struct {
 	Id string
 	ExecuteTime int64
+	Task *Task
 	Next *CronTask
 	Prev *CronTask
 }
 //1,3
 func (node *CronTask) Insert(task *CronTask) *CronTask {
-	if node.Id == "" {
-		node.Id = task.Id
-		node.ExecuteTime = task.ExecuteTime
-		return node
-	}
 	executeTime := task.ExecuteTime
 	for {
 		if node.ExecuteTime >= executeTime {
@@ -55,29 +51,46 @@ func (node *CronTask) Insert(task *CronTask) *CronTask {
 }
 
 func (node *CronTask) Get(id string) (*CronTask, error) {
-	for node.Next != nil  {
+	for {
 		if node.Id == id {
 			return node, nil
 		} else {
-			node = node.Next
+			if node.Next != nil {
+				break
+			} else {
+				node = node.Next
+			}
 		}
 	}
 	return nil, errors.New("No Result ")
 }
 
 func (node *CronTask) GetFirst() *CronTask {
-	return node
+	if node.Next == nil {
+		return nil
+	}
+	return node.Next
 }
 
 func (node *CronTask) Delete(id string) (*CronTask, error) {
-	res := node
-	for node.Next != nil  {
+	if node == nil || node.Next == nil {
+		return node, errors.New("empty queue ")
+	}
+	for {
 		if node.Id == id {
-			node.Prev.Next = node.Next
-			node.Next.Prev = node.Prev
-			return res, nil
+			if node.Prev != nil {
+				node.Prev.Next = node.Next
+			}
+			if node.Next != nil {
+				node.Next.Prev = node.Prev
+			}
+			return node, nil
 		} else {
-			node = node.Next
+			if node.Next != nil {
+				node = node.Next
+			} else {
+				break
+			}
 		}
 	}
 	return nil, errors.New("Not Found ")
