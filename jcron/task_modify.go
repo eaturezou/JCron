@@ -12,6 +12,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"regexp"
 	"strconv"
@@ -39,6 +40,16 @@ type CronTime struct {
 	cycleType int
 	num int
 }
+
+type TaskCommand struct {
+	TaskType int
+	content string
+}
+
+const (
+	script = iota
+	httpCallback
+)
 
 const (
 	fixedTime = iota
@@ -144,14 +155,19 @@ func GetTickSecond(task *Task) (tickSecond int64, err error) {
 		factYear = factYear + factMonth / 12
 		factMonth = factMonth % 12
 	}
-	factDate := strconv.Itoa(factYear) + "-" +
-		strconv.Itoa(factMonth) + "-" +
-		strconv.Itoa(factDay) + " " +
-		strconv.Itoa(factHour) + ":" +
-		strconv.Itoa(factMinute) + ":" +
-		strconv.Itoa(factSecond)
-	timestamp, _ := time.Parse("Y-m-d H:i:s", factDate)
-	return timestamp.Unix(), nil
+	factDate := fmt.Sprintf("%02d", factYear) + "-" +
+		fmt.Sprintf("%02d", factMonth) + "-" +
+		fmt.Sprintf("%02d", factDay) + " " +
+		fmt.Sprintf("%02d", factHour) + ":" +
+		fmt.Sprintf("%02d", factMinute) + ":" +
+		fmt.Sprintf("%02d", factSecond)
+	loc, _ := time.LoadLocation("Local")
+	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", factDate, loc)
+	if err != nil {
+		return -1, err
+	}
+	result := timestamp.Unix()
+	return result, nil
 }
 
 /*
@@ -207,14 +223,14 @@ func New(task *Task) error {
 	md5Id := hex.EncodeToString(md5Obj.Sum(nil))
 	timestamp, err := GetTickSecond(task)
 	if timestamp <= 0 {
-		return errors.New("Parse times error, timestamp lower than zero ")
+		return errors.New("Parse times error, " + err.Error())
 	}
 	if err != nil {
 		return err
 	}
 	newCronTsk := &CronTask{
 		Id:md5Id,
-		ExecuteTime:10,
+		ExecuteTime:timestamp,
 		Task:task,
 	}
 	cronQueue.Insert(newCronTsk)
@@ -222,7 +238,14 @@ func New(task *Task) error {
 }
 
 func GetTask() *CronTask {
+	mutex.Lock()
+	defer mutex.Unlock()
 	return cronQueue.GetFirst()
+}
+
+func DeleteTask(id string) error {
+	_, err := cronQueue.Delete(id)
+	return err
 }
 
 

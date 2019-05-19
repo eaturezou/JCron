@@ -13,6 +13,9 @@ package jcron
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"os/exec"
+	"regexp"
 	"time"
 )
 
@@ -27,16 +30,16 @@ func dispatcher() {
 		if task == nil {
 			continue
 		}
-		fmt.Println("Get task " + task.Id)
 		diffSeconds := task.ExecuteTime - nowTimestamp
+		fmt.Println(task.ExecuteTime, nowTimestamp, diffSeconds)
 		if diffSeconds <= 0 {
-			go executeCommand(task)
+			executeCommand(task)
 			continue
 		}
 		tickChan := time.Tick(time.Second * time.Duration(diffSeconds))
 		select {
 		case <-tickChan:
-			go executeCommand(task)
+			executeCommand(task)
 		case result := <-runResult:
 			if result {
 				log.Println("Run success ")
@@ -54,20 +57,35 @@ func executeCommand(task *CronTask)  {
 		runResult<-false
 		return
 	}
+	reg, _ := regexp.Compile(`^htttp(s)?://.*`)
+	matched := reg.Match([]byte(task.Task.Command))
 	go func() {
-		//cmd := exec.Command(task.Task.Command)
-		//err:= cmd.Run()
-		fmt.Println("Do the command ")
-		var err error
-		if err != nil {
-			runResult<-false
+		if matched {
+			//http回调
+			response, err := http.Get(task.Task.Command)
+			if err != nil && response.StatusCode == http.StatusOK {
+				runResult<-true
+			} else {
+				runResult<-false
+			}
 		} else {
-			runResult<-true
+			//系统下脚本
+			cmd := exec.Command("/usr/local/sbin/php", "-r", "'echo 123;'")
+			_,err := cmd.Output()
+			if err != nil {
+				runResult<-false
+			} else {
+				runResult<-true
+			}
 		}
 	}()
-	_, err := cronQueue.Delete(task.Id)
+	err := DeleteTask(task.Id)
 	if err != nil {
 		log.Println(err.Error())
 	}
 
+	err = New(task.Task)
+	if err != nil {
+		log.Println(err.Error())
+	}
 }

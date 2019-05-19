@@ -13,6 +13,7 @@ package main
 import (
 	"fmt"
 	"learning/JCron/jcron"
+	"strconv"
 	"time"
 )
 
@@ -48,25 +49,26 @@ func testLink() {
 }
 
 func testTask()  {
-	task := &jcron.Task{
-		Name: "hello world",
-		TaskFrequency: jcron.TaskFrequency{
-			Second:"10/*",
-			Minute:"*",
-			Hour:"*",
-			Day:"*",
-			Month:"*",
-			Week:"*",
-		},
-		Command:"php -r 'echo 123;'",
-	}
-	err := jcron.New(task)
-	if err != nil {
-		fmt.Println(err.Error())
+	for i := 10; i < 10000000; i += 2 {
+		task := &jcron.Task{
+			Name: "hello world",
+			TaskFrequency: jcron.TaskFrequency{
+				Second:strconv.Itoa(i) + "/*",
+				Minute:"*",
+				Hour:"*",
+				Day:"*",
+				Month:"*",
+				Week:"*",
+			},
+			Command:"php -r 'echo 123;'" + strconv.Itoa(i),
+		}
+		err := jcron.New(task)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
 	}
 	for {
-		fmt.Println("------------------Heart Beat------------------")
-		time.Sleep(5*time.Second)
+		time.Sleep(100*time.Second)
 	}
 }
 
