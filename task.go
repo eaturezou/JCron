@@ -10,13 +10,18 @@ package main
 
 import (
 	"bufio"
-	"lib/JCron/jcron"
+	"fmt"
+	"learning/JCron/jcron"
 	"log"
 	"net"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 )
+
+var msgChan = make(chan string, 5)
+var connecttion  = make(map[string]net.Conn)
 
 func main() {
 	args := os.Args[1:]
@@ -59,6 +64,8 @@ func main() {
 	listener, err := net.Listen("tcp", config["-h"] + ":" + config["-p"])
 	if err != err {
 		log.Fatalln("Start server error : " + err.Error())
+	} else {
+		log.Println("Start server : " + config["-h"] + ":" + config["-p"])
 	}
 	for {
 		conn, err := listener.Accept()
@@ -69,19 +76,57 @@ func main() {
 	}
 }
 
-func doTaskModify(conn net.Conn)  {
-	reader := bufio.NewScanner(conn)
-	var msg string
-	for reader.Scan() {
-		msg += reader.Text()
-	}
-	query, err := parseQuery(msg)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
+func init()  {
+	go dispatcher()
 }
 
-func parseQuery(queryStr string) (*jcron.TaskModify, error) {
-	return &jcron.TaskModify{}, nil
+func dispatcher() {
+	for {
+		select {
+		case msg := <-msgChan:
+			fmt.Println(msg)
+			params := strings.Split(msg, " ")
+			fmt.Printf("%+v", params)
+			task := &jcron.Task{
+				Name: msg,
+				TaskFrequency: jcron.TaskFrequency{
+					Second:params[1],
+					Minute:params[2],
+					Hour:params[3],
+					Day:params[4],
+					Month:params[5],
+					Week:params[6],
+				},
+				Command:params[7],
+			}
+			err := jcron.New(task)
+			var result string
+			connect := connecttion[params[0]]
+			if connect == nil {
+				result = "System error"
+			}
+			if err != nil {
+				result = err.Error()
+			} else {
+				result = "success"
+			}
+			sendNum, err := connect.Write([]byte(result))
+			if err != nil {
+				log.Println("Send error, send :" + strconv.Itoa(sendNum) + "error : " + err.Error())
+			}
+		}
+	}
 }
+
+func doTaskModify(conn net.Conn)  {
+	connectId := conn.RemoteAddr().String()
+	connecttion[connectId] = conn
+	reader := bufio.NewScanner(conn)
+	for reader.Scan() {
+		msgChan<- connectId + " " + reader.Text()
+	}
+}
+
+//func parseQuery(queryStr string) (*jcron.TaskModify, error) {
+//	return &jcron.TaskModify{}, nil
+//}
