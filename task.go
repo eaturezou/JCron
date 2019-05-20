@@ -10,7 +10,7 @@ package main
 
 import (
 	"bufio"
-	"fmt"
+	"errors"
 	"learning/JCron/jcron"
 	"log"
 	"net"
@@ -21,7 +21,7 @@ import (
 )
 
 var msgChan = make(chan string, 5)
-var connecttion  = make(map[string]net.Conn)
+var connection = make(map[string]net.Conn)
 
 func main() {
 	args := os.Args[1:]
@@ -62,7 +62,7 @@ func main() {
 		config["-p"] = "4698"
 	}
 	listener, err := net.Listen("tcp", config["-h"] + ":" + config["-p"])
-	if err != err {
+	if err != nil {
 		log.Fatalln("Start server error : " + err.Error())
 	} else {
 		log.Println("Start server : " + config["-h"] + ":" + config["-p"])
@@ -84,9 +84,18 @@ func dispatcher() {
 	for {
 		select {
 		case msg := <-msgChan:
-			fmt.Println(msg)
+			var result string
 			params := strings.Split(msg, " ")
-			fmt.Printf("%+v", params)
+			clientId := params[0]
+			paramsLength := len(params)
+			if paramsLength < 7 {
+				result = "System error "
+				err := sendMsgToClient(clientId, result)
+				if err != nil {
+					log.Println(err.Error())
+				}
+				continue
+			}
 			task := &jcron.Task{
 				Name: msg,
 				TaskFrequency: jcron.TaskFrequency{
@@ -100,19 +109,17 @@ func dispatcher() {
 				Command:params[7],
 			}
 			err := jcron.New(task)
-			var result string
-			connect := connecttion[params[0]]
-			if connect == nil {
-				result = "System error"
+			if err != nil {
+				result = err.Error()
 			}
 			if err != nil {
 				result = err.Error()
 			} else {
 				result = "success"
 			}
-			sendNum, err := connect.Write([]byte(result))
+			err = sendMsgToClient(clientId, result)
 			if err != nil {
-				log.Println("Send error, send :" + strconv.Itoa(sendNum) + "error : " + err.Error())
+				log.Println("Error: " + err.Error())
 			}
 		}
 	}
@@ -120,13 +127,21 @@ func dispatcher() {
 
 func doTaskModify(conn net.Conn)  {
 	connectId := conn.RemoteAddr().String()
-	connecttion[connectId] = conn
+	connection[connectId] = conn
 	reader := bufio.NewScanner(conn)
 	for reader.Scan() {
 		msgChan<- connectId + " " + reader.Text()
 	}
 }
 
-//func parseQuery(queryStr string) (*jcron.TaskModify, error) {
-//	return &jcron.TaskModify{}, nil
-//}
+func sendMsgToClient(clientId string, msg string) error {
+	connect := connection[clientId]
+	if connect == nil {
+		return errors.New("Send msg error, not found client, client id " + clientId)
+	}
+	sendNum, err := connect.Write([]byte(msg + "\r\n"))
+	if err != nil {
+		return errors.New("Send error, send :" + strconv.Itoa(sendNum) + "error : " + err.Error())
+	}
+	return nil
+}
