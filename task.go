@@ -87,39 +87,66 @@ func dispatcher() {
 			var result string
 			params := strings.Split(msg, " ")
 			clientId := params[0]
-			paramsLength := len(params)
-			if paramsLength < 7 {
-				result = "System error "
-				err := sendMsgToClient(clientId, result)
+			command := strings.ToLower(params[1])
+			switch command {
+			case "quit":
+				connect := connection[clientId]
+				err := connect.Close()
 				if err != nil {
-					log.Println(err.Error())
+					log.Println("Close client error " + err.Error())
 				}
-				continue
-			}
-			task := &jcron.Task{
-				Name: msg,
-				TaskFrequency: jcron.TaskFrequency{
-					Second:params[1],
-					Minute:params[2],
-					Hour:params[3],
-					Day:params[4],
-					Month:params[5],
-					Week:params[6],
-				},
-				Command:params[7],
-			}
-			err := jcron.New(task)
-			if err != nil {
-				result = err.Error()
-			}
-			if err != nil {
-				result = err.Error()
-			} else {
-				result = "success"
-			}
-			err = sendMsgToClient(clientId, result)
-			if err != nil {
-				log.Println("Error: " + err.Error())
+			case "add":
+				paramsLength := len(params)
+				if paramsLength < 9 {
+					result = "System error "
+					err := sendMsgToClient(clientId, result)
+					if err != nil {
+						log.Println(err.Error())
+					}
+					break
+				}
+				task := &jcron.Task{
+					Name: msg,
+					TaskFrequency: jcron.TaskFrequency{
+						Second:params[2],
+						Minute:params[3],
+						Hour:params[4],
+						Day:params[5],
+						Month:params[6],
+						Week:params[7],
+					},
+					Command:params[8],
+				}
+				err := jcron.New(task)
+				if err != nil {
+					result = err.Error()
+				}
+				if err != nil {
+					result = err.Error()
+				} else {
+					result = "success"
+				}
+				err = sendMsgToClient(clientId, result)
+				if err != nil {
+					log.Println("Error: " + err.Error())
+				}
+			case "del":
+			case "keys":
+				list := jcron.TaskList()
+				var msg string
+				if list != nil {
+					for _, task := range list {
+						if task != nil {
+							msg = msg + task.Id + "\n"
+						}
+					}
+				} else {
+					msg = "empty"
+				}
+				err := sendMsgToClient(clientId, msg)
+				if err != nil {
+					log.Println("Error: " + err.Error())
+				}
 			}
 		}
 	}

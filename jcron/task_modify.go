@@ -228,6 +228,10 @@ func New(task *Task) error {
 	if err != nil {
 		return err
 	}
+	nowTimestamp := time.Now().Unix()
+	if nowTimestamp == timestamp {
+		 timestamp ++
+	}
 	newCronTsk := &CronTask{
 		Id:md5Id,
 		ExecuteTime:timestamp,

@@ -95,3 +95,20 @@ func (node *CronTask) Delete(id string) (*CronTask, error) {
 	}
 	return nil, errors.New("Not Found ")
 }
+
+func TaskList() []*CronTask {
+	if cronQueue.Next == nil {
+		return nil
+	}
+	tmp := cronQueue
+	var result []*CronTask
+	for {
+		result = append(result, tmp.Next)
+		if tmp.Next == nil {
+			break
+		} else {
+			tmp = tmp.Next
+		}
+	}
+	return result
+}
