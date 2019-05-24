@@ -11,7 +11,6 @@
 package jcron
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os/exec"
@@ -31,7 +30,6 @@ func dispatcher() {
 			continue
 		}
 		diffSeconds := task.ExecuteTime - nowTimestamp
-		fmt.Println(task.ExecuteTime, nowTimestamp, diffSeconds)
 		if diffSeconds <= 0 {
 			executeCommand(task)
 			continue
@@ -57,7 +55,7 @@ func executeCommand(task *CronTask)  {
 		runResult<-false
 		return
 	}
-	reg, _ := regexp.Compile(`^htttp(s)?://.*`)
+	reg, _ := regexp.Compile(`^http(s)?://.*`)
 	matched := reg.Match([]byte(task.Task.Command))
 	go func() {
 		if matched {
@@ -71,7 +69,8 @@ func executeCommand(task *CronTask)  {
 		} else {
 			//系统下脚本
 			cmd := exec.Command("/usr/local/sbin/php", "-r", "'echo 123;'")
-			_,err := cmd.Output()
+			msg,err := cmd.Output()
+			log.Println(msg)
 			if err != nil {
 				runResult<-false
 			} else {

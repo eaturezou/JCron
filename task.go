@@ -22,6 +22,7 @@ import (
 
 var msgChan = make(chan string, 5)
 var connection = make(map[string]net.Conn)
+var config map[string]string
 
 func main() {
 	args := os.Args[1:]
@@ -77,6 +78,26 @@ func main() {
 }
 
 func init()  {
+	_, err := os.Stat("./config.log")
+	if err == nil || os.IsExist(err) {
+		fileHandler, err := os.Open("./config.log")
+		if err != nil {
+			log.Fatalln("Load core data error : " + err.Error())
+		}
+		var content []byte
+		_, err = fileHandler.Read(content)
+		if err != nil {
+			log.Fatalln("Load core data error : " + err.Error())
+		}
+		all := strings.Split(string(content), "\n")
+		for _, item := range all {
+			configItem := strings.Split(item, "=")
+			if len(config) < 2 {
+				log.Fatalln("Config data err :" + configItem[0])
+			}
+			config[configItem[0]] = configItem[1]
+		}
+	}
 	go dispatcher()
 }
 
@@ -137,7 +158,8 @@ func dispatcher() {
 				if list != nil {
 					for _, task := range list {
 						if task != nil {
-							msg = msg + task.Id + "\n"
+							msg = msg + task.Id + "\n" +
+								"\t NextTime: " + strconv.Itoa(int(task.ExecuteTime)) + "\n"
 						}
 					}
 				} else {
