@@ -2,7 +2,7 @@
 | Author: Zoueature
 | Email: zoueature@gmail.com
 | Date: 19-5-12
-| Description: 
+| Description:
 | -------------------------------------------------
 */
 
@@ -30,20 +30,20 @@ type Task struct {
 type TaskFrequency struct {
 	Second string
 	Minute string
-	Hour string
-	Day string
-	Week string
-	Month string
+	Hour   string
+	Day    string
+	Week   string
+	Month  string
 }
 
 type CronTime struct {
 	cycleType int
-	num int
+	num       int
 }
 
 type TaskCommand struct {
 	TaskType int
-	content string
+	content  string
 }
 
 const (
@@ -58,23 +58,23 @@ const (
 )
 
 var monthDayNumMap = [...]int{
-	0 : 31,
-	1 : 28,
-	2 : 31,
-	3 : 30,
-	4 : 31,
-	5 : 30,
-	6 : 31,
-	7 : 31,
-	8 : 30,
-	9 : 31,
-	10 : 30,
+	0:  31,
+	1:  28,
+	2:  31,
+	3:  30,
+	4:  31,
+	5:  30,
+	6:  31,
+	7:  31,
+	8:  30,
+	9:  31,
+	10: 30,
 	11: 31,
 }
 
 var (
 	cronQueue = &CronTask{}
-	mutex sync.RWMutex
+	mutex     sync.RWMutex
 )
 
 func init() {
@@ -127,7 +127,7 @@ func GetTickSecond(task *Task) (tickSecond int64, err error) {
 		goto spliceTime
 	}
 	factMonth = parseCronTime(&monthCronTime, factMonth)
-	spliceTime:
+spliceTime:
 	if factSecond >= 60 {
 		factMinute += factSecond / 60
 		factSecond = factSecond % 60
@@ -142,17 +142,17 @@ func GetTickSecond(task *Task) (tickSecond int64, err error) {
 	}
 	thisDayNum := monthDayNumMap[nowMonth]
 	if factDay > thisDayNum {
-		for i := nowMonth; i < 12; i ++ {
+		for i := nowMonth; i < 12; i++ {
 			if factDay > monthDayNumMap[i] {
-				 factDay -= monthDayNumMap[i]
-				 factMonth ++
+				factDay -= monthDayNumMap[i]
+				factMonth++
 			} else {
 				break
 			}
 		}
 	}
 	if factMonth > 12 {
-		factYear = factYear + factMonth / 12
+		factYear = factYear + factMonth/12
 		factMonth = factMonth % 12
 	}
 	factDate := fmt.Sprintf("%02d", factYear) + "-" +
@@ -172,7 +172,7 @@ func GetTickSecond(task *Task) (tickSecond int64, err error) {
 
 /*
 解析实际的执行时间
- */
+*/
 func parseCronTime(cronTime *CronTime, referTime int) (fact int) {
 	switch cronTime.cycleType {
 	case ignoreTime:
@@ -190,26 +190,26 @@ func parseTimeStr(str string) (CronTime, error) {
 		//为数字则为固定时间
 		return CronTime{
 			cycleType: fixedTime,
-			num: num,
+			num:       num,
 		}, nil
 	}
 	if str == "*" {
 		return CronTime{
 			cycleType: ignoreTime,
-			num: 1,
+			num:       1,
 		}, nil
 	} else {
 		regexpObj, _ := regexp.Compile(`[1-9][0-9]*/\*?`)
 		timStr := regexpObj.FindString(str)
 		if timStr == "" {
-			 log.Println("Time format error : " + str)
-			 return CronTime{}, errors.New("Time format error : " + str)
+			log.Println("Time format error : " + str)
+			return CronTime{}, errors.New("Time format error : " + str)
 		}
-		arr := strings.Split(timStr,  "/")
+		arr := strings.Split(timStr, "/")
 		timeInt, _ := strconv.Atoi(arr[0])
 		return CronTime{
-			cycleType:cycleTime,
-			num:timeInt,
+			cycleType: cycleTime,
+			num:       timeInt,
 		}, nil
 	}
 }
@@ -230,12 +230,12 @@ func New(task *Task) error {
 	}
 	nowTimestamp := time.Now().Unix()
 	if nowTimestamp == timestamp {
-		 timestamp ++
+		timestamp++
 	}
 	newCronTsk := &CronTask{
-		Id:md5Id,
-		ExecuteTime:timestamp,
-		Task:task,
+		Id:          md5Id,
+		ExecuteTime: timestamp,
+		Task:        task,
 	}
 	cronQueue.Insert(newCronTsk)
 	return nil
@@ -247,10 +247,11 @@ func GetTask() *CronTask {
 	return cronQueue.GetFirst()
 }
 
-func DeleteTask(id string) error {
+func DeleteTask(id string, lock bool) error {
+	if lock {
+		mutex.Lock()
+		defer mutex.Unlock()
+	}
 	_, err := cronQueue.Delete(id)
 	return err
 }
-
-
-

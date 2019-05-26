@@ -10,6 +10,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/gob"
 	"errors"
 	"learning/JCron/jcron"
 	"log"
@@ -30,14 +32,14 @@ func main() {
 	var key []string
 	var value []string
 	for index, argv := range args {
-		if index % 2 == 0 {
+		if index%2 == 0 {
 			key = append(key, string(index))
 		} else {
 			value = append(value, argv)
 		}
 	}
 	valueLen := len(value)
-	for i := 0; i < len(key); i ++ {
+	for i := 0; i < len(key); i++ {
 		configName := key[i]
 		if valueLen <= i {
 			log.Fatalln("Start Server Error " + configName + "No Value")
@@ -62,7 +64,7 @@ func main() {
 	if value, ok := config["-p"]; value == "" || !ok {
 		config["-p"] = "4698"
 	}
-	listener, err := net.Listen("tcp", config["-h"] + ":" + config["-p"])
+	listener, err := net.Listen("tcp", config["-h"]+":"+config["-p"])
 	if err != nil {
 		log.Fatalln("Start server error : " + err.Error())
 	} else {
@@ -77,9 +79,9 @@ func main() {
 	}
 }
 
-func init()  {
+func init() {
 	_, err := os.Stat("./config.log")
-	if err == nil || os.IsExist(err) {
+	if err == nil && os.IsExist(err) {
 		fileHandler, err := os.Open("./config.log")
 		if err != nil {
 			log.Fatalln("Load core data error : " + err.Error())
@@ -129,14 +131,14 @@ func dispatcher() {
 				task := &jcron.Task{
 					Name: msg,
 					TaskFrequency: jcron.TaskFrequency{
-						Second:params[2],
-						Minute:params[3],
-						Hour:params[4],
-						Day:params[5],
-						Month:params[6],
-						Week:params[7],
+						Second: params[2],
+						Minute: params[3],
+						Hour:   params[4],
+						Day:    params[5],
+						Month:  params[6],
+						Week:   params[7],
 					},
-					Command:params[8],
+					Command: params[8],
 				}
 				err := jcron.New(task)
 				if err != nil {
@@ -152,6 +154,17 @@ func dispatcher() {
 					log.Println("Error: " + err.Error())
 				}
 			case "del":
+				taskId := params[2]
+				err := jcron.DeleteTask(taskId, true)
+				if err != nil {
+					result = "fail"
+				} else {
+					result = "success"
+				}
+				err = sendMsgToClient(clientId, result)
+				if err != nil {
+					log.Println("Error: " + err.Error())
+				}
 			case "keys":
 				list := jcron.TaskList()
 				var msg string
@@ -174,12 +187,12 @@ func dispatcher() {
 	}
 }
 
-func doTaskModify(conn net.Conn)  {
+func doTaskModify(conn net.Conn) {
 	connectId := conn.RemoteAddr().String()
 	connection[connectId] = conn
 	reader := bufio.NewScanner(conn)
 	for reader.Scan() {
-		msgChan<- connectId + " " + reader.Text()
+		msgChan <- connectId + " " + reader.Text()
 	}
 }
 
@@ -193,4 +206,22 @@ func sendMsgToClient(clientId string, msg string) error {
 		return errors.New("Send error, send :" + strconv.Itoa(sendNum) + "error : " + err.Error())
 	}
 	return nil
+}
+
+func syncTaskToFile() {
+	list := jcron.TaskList()
+	var result bytes.Buffer
+	fileHandle, _ := os.Open("./config.log")
+	if list != nil {
+		for _, task := range list {
+			if task != nil {
+				encoder := gob.NewEncoder(&result)
+				_  = encoder.Encode(task)
+				encodeBytes := result.Bytes()
+				logStr := string(encodeBytes)
+				logStr = logStr + "\n"
+				_, _ = fileHandle.Write([]byte(logStr))
+			}
+		}
+	}
 }

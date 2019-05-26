@@ -22,12 +22,13 @@ type CronQueue interface {
 }
 
 type CronTask struct {
-	Id string
+	Id          string
 	ExecuteTime int64
-	Task *Task
-	Next *CronTask
-	Prev *CronTask
+	Task        *Task
+	Next        *CronTask
+	Prev        *CronTask
 }
+
 //1,3
 func (node *CronTask) Insert(task *CronTask) *CronTask {
 	executeTime := task.ExecuteTime

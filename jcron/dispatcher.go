@@ -48,11 +48,11 @@ func dispatcher() {
 	}
 }
 
-func executeCommand(task *CronTask)  {
+func executeCommand(task *CronTask) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if task == nil || task.Task == nil {
-		runResult<-false
+		runResult <- false
 		return
 	}
 	reg, _ := regexp.Compile(`^http(s)?://.*`)
@@ -62,27 +62,27 @@ func executeCommand(task *CronTask)  {
 			//http回调
 			response, err := http.Get(task.Task.Command)
 			if err != nil && response.StatusCode == http.StatusOK {
-				runResult<-true
+				runResult <- true
 			} else {
-				runResult<-false
+				runResult <- false
 			}
 		} else {
 			//系统下脚本
 			cmd := exec.Command("/usr/local/sbin/php", "-r", "'echo 123;'")
-			msg,err := cmd.Output()
+			msg, err := cmd.Output()
 			log.Println(msg)
 			if err != nil {
-				runResult<-false
+				runResult <- false
 			} else {
-				runResult<-true
+				runResult <- true
 			}
 		}
 	}()
-	err := DeleteTask(task.Id)
+	err := DeleteTask(task.Id, false)
 	if err != nil {
 		log.Println(err.Error())
+		return
 	}
-
 	err = New(task.Task)
 	if err != nil {
 		log.Println(err.Error())
