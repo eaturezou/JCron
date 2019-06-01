@@ -11,6 +11,7 @@
 package jcron
 
 import (
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os/exec"
@@ -20,9 +21,28 @@ import (
 
 type Queue CronTask
 
-var runResult chan bool
+var (
+	runResult = make(chan bool)
+	tickTask = make(chan *CronTask)
+)
 
 func dispatcher() {
+	go func() {
+		for {
+			select {
+			case task := <- tickTask:
+				executeCommand(task)
+			case result := <-runResult:
+				if result {
+					log.Println("Run success ")
+				} else {
+					log.Println("Run command fail ")
+				}
+			default:
+
+			}
+		}
+	}()
 	for {
 		nowTimestamp := time.Now().Unix()
 		task := GetTask()
@@ -31,19 +51,18 @@ func dispatcher() {
 		}
 		diffSeconds := task.ExecuteTime - nowTimestamp
 		if diffSeconds <= 0 {
-			executeCommand(task)
+			tickTask<-task
 			continue
 		}
-		tickChan := time.Tick(time.Second * time.Duration(diffSeconds))
+		ticker := time.NewTicker(time.Second * time.Duration(diffSeconds))
+		timestampMutex.Lock()
+		nowExecuteTimestamp = task.ExecuteTime
+		timestampMutex.Unlock()
 		select {
-		case <-tickChan:
-			executeCommand(task)
-		case result := <-runResult:
-			if result {
-				log.Println("Run success ")
-			} else {
-				log.Println("Run command fail ")
-			}
+		case <-ticker.C:
+			tickTask<-task
+		case <-hadInsert:
+			ticker.Stop()
 		}
 	}
 }
@@ -61,6 +80,10 @@ func executeCommand(task *CronTask) {
 		if matched {
 			//http回调
 			response, err := http.Get(task.Task.Command)
+			_, err = ioutil.ReadAll(response.Body)
+			if response != nil && response.Body != nil {
+				defer response.Body.Close()
+			}
 			if err != nil && response.StatusCode == http.StatusOK {
 				runResult <- true
 			} else {
@@ -69,8 +92,7 @@ func executeCommand(task *CronTask) {
 		} else {
 			//系统下脚本
 			cmd := exec.Command("/usr/local/sbin/php", "-r", "'echo 123;'")
-			msg, err := cmd.Output()
-			log.Println(msg)
+			_, err := cmd.Output()
 			if err != nil {
 				runResult <- false
 			} else {
@@ -83,8 +105,8 @@ func executeCommand(task *CronTask) {
 		log.Println(err.Error())
 		return
 	}
-	err = New(task.Task)
-	if err != nil {
+	err = New(task.Task, true)
+	if err != nil && err.Error() != "expire " {
 		log.Println(err.Error())
 	}
 }

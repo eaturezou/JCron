@@ -75,6 +75,9 @@ var monthDayNumMap = [...]int{
 var (
 	cronQueue = &CronTask{}
 	mutex     sync.RWMutex
+	nowExecuteTimestamp int64
+	timestampMutex sync.RWMutex
+	hadInsert = make(chan bool)
 )
 
 func init() {
@@ -83,7 +86,7 @@ func init() {
 
 //秒 分 时 日 周 月
 //获取下次执行的时间， 字符串日期格式
-func GetTickSecond(task *Task) (tickSecond int64, err error) {
+func GetTickSecond(task *Task, inExecute bool) (tickSecond int64, err error) {
 	nowTime := time.Now()
 	factYear, nowMonth, factDay := nowTime.Date()
 	factMonth := int(nowMonth)
@@ -110,23 +113,23 @@ func GetTickSecond(task *Task) (tickSecond int64, err error) {
 	if err != nil {
 		return 0, err
 	}
-	factSecond = parseCronTime(&secondTimeCron, factSecond)
+	factSecond = parseCronTime(&secondTimeCron, factSecond, 60)
 	if secondTimeCron.cycleType != fixedTime {
 		goto spliceTime
 	}
-	factMinute = parseCronTime(&minuteTimeCron, factMinute)
+	factMinute = parseCronTime(&minuteTimeCron, factMinute, 60)
 	if minuteTimeCron.cycleType != fixedTime {
 		goto spliceTime
 	}
-	factHour = parseCronTime(&hourCronTime, factHour)
-	if minuteTimeCron.cycleType != fixedTime {
+	factHour = parseCronTime(&hourCronTime, factHour, 24)
+	if hourCronTime.cycleType != fixedTime {
 		goto spliceTime
 	}
-	factDay = parseCronTime(&dayCronTime, factDay)
+	factDay = parseCronTime(&dayCronTime, factDay, monthDayNumMap[nowMonth])
 	if dayCronTime.cycleType != fixedTime {
 		goto spliceTime
 	}
-	factMonth = parseCronTime(&monthCronTime, factMonth)
+	factMonth = parseCronTime(&monthCronTime, factMonth, 12)
 spliceTime:
 	if factSecond >= 60 {
 		factMinute += factSecond / 60
@@ -173,11 +176,14 @@ spliceTime:
 /*
 解析实际的执行时间
 */
-func parseCronTime(cronTime *CronTime, referTime int) (fact int) {
+func parseCronTime(cronTime *CronTime, referTime int, lowAdd int) (fact int) {
 	switch cronTime.cycleType {
 	case ignoreTime:
 		return referTime
 	case fixedTime:
+		if cronTime.num <= referTime {
+			cronTime.num += lowAdd
+		}
 		return cronTime.num
 	case cycleTime:
 		return cronTime.num + referTime
@@ -215,22 +221,26 @@ func parseTimeStr(str string) (CronTime, error) {
 }
 
 //新增一个任务的任务队列
-func New(task *Task) error {
+func New(task *Task, inExecute bool) error {
 	//用执行的命令作为任务唯一标识
 	md5Str := task.Command
 	md5Obj := md5.New()
 	md5Obj.Write([]byte(md5Str))
 	md5Id := hex.EncodeToString(md5Obj.Sum(nil))
-	timestamp, err := GetTickSecond(task)
+	timestamp, err := GetTickSecond(task, inExecute)
 	if timestamp <= 0 {
 		return errors.New("Parse times error, " + err.Error())
 	}
 	if err != nil {
 		return err
 	}
-	nowTimestamp := time.Now().Unix()
+	now := time.Now()
+	nowTimestamp := now.Unix()
 	if nowTimestamp == timestamp {
 		timestamp++
+	}
+	if timestamp < nowTimestamp && inExecute {
+		return errors.New("expire ")
 	}
 	newCronTsk := &CronTask{
 		Id:          md5Id,
@@ -238,6 +248,11 @@ func New(task *Task) error {
 		Task:        task,
 	}
 	cronQueue.Insert(newCronTsk)
+	timestampMutex.RLock()
+	if timestamp < nowExecuteTimestamp {
+		hadInsert <- true
+	}
+	timestampMutex.RUnlock()
 	return nil
 }
 

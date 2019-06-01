@@ -140,7 +140,7 @@ func dispatcher() {
 					},
 					Command: params[8],
 				}
-				err := jcron.New(task)
+				err := jcron.New(task, false)
 				if err != nil {
 					result = err.Error()
 				}
